@@ -1,4 +1,5 @@
 import random
+import secrets
 import string
 import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -18,65 +19,67 @@ app.add_middleware(
 # --- GAME MANAGEMENT LOGIC ---
 
 def generate_code(length=4):
-    """Generates a random 4-letter code (e.g., ABCD)"""
     return ''.join(random.choices(string.ascii_uppercase, k=length))
 
 class GameManager:
     def __init__(self):
-        # Stores game state: { "ABCD": { "state": "waiting", "players": [], "admin": socket } }
         self.games: Dict[str, dict] = {} 
 
     def create_game(self):
         code = generate_code()
-        while code in self.games: # Ensure uniqueness
+        while code in self.games:
             code = generate_code()
         
+        # Generate a secret token for the admin
+        token = secrets.token_hex(16)
+        
         self.games[code] = {
-            "status": "waiting", # waiting, active, ended
-            "players": {},       # { "socket_object": "nickname" }
-            "admin": None        # The host's websocket
+            "status": "waiting",
+            "admin_token": token,
+            "admin_socket": None,
+            "players": {}
         }
-        return code
+        # Return BOTH code and token
+        return code, token
 
     async def connect_player(self, websocket: WebSocket, game_code: str):
         await websocket.accept()
         
-        # Check validity
         if game_code not in self.games:
             await websocket.send_json({"type": "ERROR", "payload": "INVALID_CODE"})
             await websocket.close()
             return False
         
-        self.games[game_code]["players"][websocket] = "Anonymous" 
+        self.games[game_code]["players"][websocket] = "Anonymous"
         return True
 
     def remove_player(self, websocket: WebSocket, game_code: str):
-        if game_code in self.games and websocket in self.games[game_code]["players"]:
-            del self.games[game_code]["players"][websocket]
-            # If admin leaves, maybe pause game? For now, ignore.
+        if game_code in self.games:
+            # If admin leaves, clear the admin_socket reference
+            if self.games[game_code]["admin_socket"] == websocket:
+                self.games[game_code]["admin_socket"] = None
+            
+            if websocket in self.games[game_code]["players"]:
+                del self.games[game_code]["players"][websocket]
 
     async def broadcast_status(self, game_code: str):
-        """Sends the current player list and status to everyone in the room"""
         if game_code not in self.games:
             return
 
         game = self.games[game_code]
-        # Create a list of player names
         player_list = list(game["players"].values())
         
         message = {
             "type": "LOBBY_UPDATE",
             "status": game["status"],
             "players": player_list,
-            "count": len(player_list)
         }
         
-        # Send to all players
         for socket in game["players"]:
             try:
                 await socket.send_text(json.dumps(message))
             except:
-                pass # Handle dead sockets later
+                pass
 
 manager = GameManager()
 
@@ -84,29 +87,52 @@ manager = GameManager()
 
 @app.post("/create")
 async def create_game_endpoint():
-    """Host clicks 'Create Game', we give them a code"""
-    code = manager.create_game()
-    return {"gameCode": code}
+    code, token = manager.create_game()
+    # Return the secret token to the host
+    return {"gameCode": code, "adminToken": token}
 
 @app.websocket("/ws/{game_code}")
 async def websocket_endpoint(websocket: WebSocket, game_code: str):
     success = await manager.connect_player(websocket, game_code)
-    if not success:
-        return # Connection rejected
+    if not success: return
 
     try:
-        # 1. Send immediate update upon joining
         await manager.broadcast_status(game_code)
         
         while True:
-            # 2. Listen for messages (JSON format)
             data = await websocket.receive_text()
             payload = json.loads(data)
 
-            # Handle "Set Nickname"
+            # HANDLE JOIN (Check for Admin Token)
             if payload.get("type") == "JOIN":
-                manager.games[game_code]["players"][websocket] = payload["nickname"]
+                nickname = payload["nickname"]
+                admin_token = payload.get("adminToken") # Frontend sends this if it has it
+                
+                game = manager.games[game_code]
+                
+                # Check if this user is the Admin
+                is_admin = False
+                if admin_token and admin_token == game["admin_token"]:
+                    is_admin = True
+                    game["admin_socket"] = websocket
+                    # Give them a special star in their name to indicate admin
+                    nickname = f"★ {nickname}" 
+
+                game["players"][websocket] = nickname
+                
+                # Tell the user if they are admin (so frontend shows buttons)
+                if is_admin:
+                    await websocket.send_json({"type": "ADMIN_CONFIRMED"})
+
                 await manager.broadcast_status(game_code)
+
+            # HANDLE START GAME (Admin Only)
+            if payload.get("type") == "START_GAME":
+                game = manager.games[game_code]
+                # Security Check: Only the stored admin socket can start it
+                if game["admin_socket"] == websocket:
+                    game["status"] = "active"
+                    await manager.broadcast_status(game_code)
 
     except WebSocketDisconnect:
         manager.remove_player(websocket, game_code)

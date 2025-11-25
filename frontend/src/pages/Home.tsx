@@ -11,7 +11,10 @@ export default function Home() {
     try {
       const response = await fetch("http://localhost:8000/create", { method: "POST" })
       const data = await response.json()
-      // Redirect to the lobby with the new code
+      
+      // Store admin token in localStorage for later use
+      localStorage.setItem(`dashflag_admin_${data.gameCode}`, data.adminToken)
+      
       navigate(`/lobby/${data.gameCode}`)
     } catch (error) {
       alert("Failed to create game server!")

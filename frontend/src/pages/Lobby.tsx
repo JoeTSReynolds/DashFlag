@@ -12,7 +12,10 @@ export default function Lobby() {
   const [gameStatus, setGameStatus] = useState("waiting")
   const [nickname, setNickname] = useState("")
   const [hasJoined, setHasJoined] = useState(false)
-  
+
+  // Admin State
+  const [isAdmin, setIsAdmin] = useState(false) // Am I the admin?
+
   // Connection State
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('CONNECTING')
   
@@ -24,6 +27,7 @@ export default function Lobby() {
 
     setConnectionStatus('CONNECTING')
     isInvalidCodeRef.current = false
+    setIsAdmin(false)
     
     const ws = new WebSocket(`ws://localhost:8000/ws/${gameCode}`)
     socketRef.current = ws
@@ -37,7 +41,6 @@ export default function Lobby() {
       try {
         const data = JSON.parse(event.data)
         
-        // 1. CATCH ERROR FROM SERVER
         if (data.type === "ERROR" && data.payload === "INVALID_CODE") {
           isInvalidCodeRef.current = true
           setConnectionStatus('INVALID_CODE')
@@ -49,6 +52,11 @@ export default function Lobby() {
           setPlayers(data.players)
           setGameStatus(data.status)
         }
+
+        if (data.type === "ADMIN_CONFIRMED") {
+          setIsAdmin(true)
+        }
+
       } catch (e) {
         console.error("Failed to parse", e)
       }
@@ -70,11 +78,20 @@ export default function Lobby() {
 
   const sendNickname = () => {
     if (socketRef.current && nickname.trim()) {
+        const storedToken = localStorage.getItem(`dashflag_admin_${gameCode}`)
+        
       socketRef.current.send(JSON.stringify({
         type: "JOIN",
-        nickname: nickname
+        nickname: nickname,
+        adminToken: storedToken // (null if we are just a player)
       }))
       setHasJoined(true)
+    }
+  }
+
+  const startGame = () => {
+    if (socketRef.current && isAdmin) {
+      socketRef.current.send(JSON.stringify({ type: "START_GAME" }))
     }
   }
 
@@ -128,7 +145,7 @@ export default function Lobby() {
     )
   }
 
-  // --- UI: NICKNAME ENTRY ---
+  // --- NICKNAME ENTRY ---
   if (!hasJoined) {
     return (
       <div className="hero min-h-screen bg-base-200">
@@ -151,17 +168,25 @@ export default function Lobby() {
     )
   }
 
-  // --- UI: LOBBY SCREEN ---
+  // --- LOBBY SCREEN ---
   return (
     <div className="flex flex-col h-screen bg-base-200 p-8">
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold text-primary tracking-tight">DashFlag</h1>
           <div className="badge badge-outline mt-2">Room: {gameCode}</div>
         </div>
-        <div className="badge badge-lg badge-secondary font-mono">{gameStatus.toUpperCase()}</div>
+        <div className="flex gap-2">
+            {/* Show special badge for Admin */}
+            {isAdmin && <div className="badge badge-accent badge-lg">ADMIN ACCESS</div>}
+            <div className={`badge badge-lg font-mono ${gameStatus === 'active' ? 'badge-success' : 'badge-secondary'}`}>
+                {gameStatus.toUpperCase()}
+            </div>
+        </div>
       </div>
 
+      {/* MAIN CARD */}
       <div className="card bg-base-100 shadow-xl flex-1 border border-base-300">
         <div className="card-body">
           <h2 className="card-title text-2xl mb-6">
@@ -177,8 +202,24 @@ export default function Lobby() {
           </div>
           
           <div className="mt-auto text-center">
-             <span className="loading loading-dots loading-lg opacity-50"></span>
-             <p className="text-sm opacity-50 mt-2">Waiting for host to start the game...</p>
+            {/* CONDITIONAL RENDER: Only Admin sees the Start Button */}
+            {isAdmin ? (
+                <div className="space-y-2">
+                    <p className="opacity-50 text-sm">You are the Host</p>
+                    <button 
+                        className="btn btn-primary btn-lg w-full max-w-md shadow-lg shadow-primary/20"
+                        onClick={startGame}
+                        disabled={gameStatus === 'active'}
+                    >
+                        {gameStatus === 'active' ? "GAME IN PROGRESS" : "START GAME"}
+                    </button>
+                </div>
+             ) : (
+                <>
+                   <span className="loading loading-dots loading-lg opacity-50"></span>
+                   <p className="text-sm opacity-50 mt-2">Waiting for host to start the game...</p>
+                </>
+             )}
           </div>
         </div>
       </div>
