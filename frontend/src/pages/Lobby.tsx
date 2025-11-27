@@ -96,7 +96,15 @@ export default function Lobby() {
         
         setConnectionError(null)
         invalidCodeRef.current = false
-        const ws = new WebSocket(`ws://localhost:8000/ws/${gameCode}`)
+        
+        // Dynamic WebSocket URL construction
+        let wsUrl = import.meta.env.VITE_WS_URL
+        if (!wsUrl) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+            wsUrl = `${protocol}//${window.location.host}`
+        }
+        
+        const ws = new WebSocket(`${wsUrl}/ws/${gameCode}`)
         socketRef.current = ws
 
         ws.onopen = () => {

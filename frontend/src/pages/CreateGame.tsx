@@ -39,17 +39,37 @@ export default function CreateGame() {
               duration_seconds: totalSeconds > 0 ? totalSeconds : 1800
           }
           
-          const response = await fetch("http://localhost:8000/create", { 
+          // Use relative path so it goes through Vite proxy (works for localhost AND ngrok)
+          const apiUrl = import.meta.env.VITE_API_URL || ''
+          const response = await fetch(`${apiUrl}/create`, { 
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { 
+                  "Content-Type": "application/json",
+                  "ngrok-skip-browser-warning": "true"
+              },
               body: JSON.stringify(payload)
           })
+
+          if (!response.ok) {
+              const err = await response.json()
+              alert(`Server Error: ${JSON.stringify(err)}`)
+              setLoading(false)
+              return
+          }
+
           const data = await response.json()
           
+          if (!data.gameCode) {
+              alert("Invalid server response")
+              setLoading(false)
+              return
+          }
+
           localStorage.setItem(`dashflag_admin_${data.gameCode}`, data.adminToken)
           navigate(`/lobby/${data.gameCode}`)
       } catch (e) {
-          alert("Error creating game")
+          console.error(e)
+          alert(`Error creating game: ${e}`)
       } finally {
           setLoading(false)
       }
