@@ -6,22 +6,26 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const createGame = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch("http://localhost:8000/create", { method: "POST" })
-      const data = await response.json()
-      
-      // Store admin token in localStorage for later use
-      localStorage.setItem(`dashflag_admin_${data.gameCode}`, data.adminToken)
-      
-      navigate(`/lobby/${data.gameCode}`)
-    } catch (error) {
-      alert("Failed to create game server!")
-    } finally {
-      setLoading(false)
-    }
+  const createGame = () => {
+      navigate('/create')
   }
+
+  // const createGame = async () => {
+  //   setLoading(true)
+  //   try {
+  //     const response = await fetch("http://localhost:8000/create", { method: "POST" })
+  //     const data = await response.json()
+      
+  //     // Store admin token in localStorage for later use
+  //     localStorage.setItem(`dashflag_admin_${data.gameCode}`, data.adminToken)
+      
+  //     navigate(`/lobby/${data.gameCode}`)
+  //   } catch (error) {
+  //     alert("Failed to create game server!")
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   const joinGame = () => {
     if (code) navigate(`/lobby/${code}`)
@@ -45,7 +49,7 @@ export default function Home() {
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                 />
-                <button className="btn btn-secondary join-item" onClick={joinGame}>GO</button>
+                <button className="btn btn-secondary join-item px-8 font-bold" onClick={joinGame}>GO</button>
               </div>
             </div>
           </div>

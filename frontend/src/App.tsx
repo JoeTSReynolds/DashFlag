@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Home from './pages/Home'
+import CreateGame from './pages/CreateGame'
 import Lobby from './pages/Lobby' 
 
 function App() {
@@ -7,9 +8,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        {/* Allow dynamic URLs like /lobby/ABCD */}
+        <Route path="/create" element={<CreateGame />} />
         <Route path="/lobby/:gameCode" element={<Lobby />} />
-        {/* Redirect /lobby without code back to home */}
         <Route path="/lobby" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
