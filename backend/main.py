@@ -224,39 +224,59 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str):
             # --- JOIN / CREATE ---
             if msg_type in ["CREATE_TEAM", "JOIN_TEAM", "JOIN_SOLO"]:
                 nickname = payload.get("nickname")
-                new_player = Player(nickname, socket=websocket)
                 
-                remove_socket_from_previous_player(websocket)
-                game["socket_map"][websocket] = new_player.id
-                
-                target_team = None
+                # VALIDATION 1: Player Name
+                if any(p.name.lower() == nickname.lower() for t in game["teams"].values() for p in t.members.values()):
+                    await websocket.send_json({"type": "TOAST", "msg": "Nickname already taken", "color": "error"})
+                    continue
 
+                target_team = None
+                
+                # VALIDATION 2: Team Logic
                 if msg_type == "CREATE_TEAM":
                     if not game["config"].teams_enabled: continue 
                     team_name = payload["teamName"]
+                    if any(t.name.lower() == team_name.lower() for t in game["teams"].values()):
+                        await websocket.send_json({"type": "TOAST", "msg": "Team name already taken", "color": "error"})
+                        continue
+                    
+                    # Prepare team creation
                     t_id = generate_team_code()
                     new_team = Team(team_name, is_solo=False)
                     new_team.id = t_id
-                    game["teams"][t_id] = new_team
                     target_team = new_team
 
                 elif msg_type == "JOIN_TEAM":
                     if not game["config"].teams_enabled: continue
                     t_code = payload["teamCode"]
-                    if t_code in game["teams"]:
-                        target_team = game["teams"][t_code]
-                        if game["config"].max_team_size > 0 and len(target_team.members) >= game["config"].max_team_size:
-                             await websocket.send_json({"type": "TOAST", "msg": "Team is full", "color": "error"})
-                             continue
-                    else:
+                    if t_code not in game["teams"]:
                         await websocket.send_json({"type": "TOAST", "msg": "Team not found", "color": "error"})
+                        continue
+                    
+                    target_team = game["teams"][t_code]
+                    if game["config"].max_team_size > 0 and len(target_team.members) >= game["config"].max_team_size:
+                        await websocket.send_json({"type": "TOAST", "msg": "Team is full", "color": "error"})
                         continue
 
                 elif msg_type == "JOIN_SOLO":
+                    # Check if nickname (team name) is taken by another team
+                    if any(t.name.lower() == nickname.lower() for t in game["teams"].values()):
+                        await websocket.send_json({"type": "TOAST", "msg": "Name already taken by a team", "color": "error"})
+                        continue
+                    
                     solo_team = Team(nickname, is_solo=True)
                     solo_team.id = generate_team_code()
-                    game["teams"][solo_team.id] = solo_team
                     target_team = solo_team
+
+                # --- COMMIT ---
+                new_player = Player(nickname, socket=websocket)
+                
+                remove_socket_from_previous_player(websocket)
+                game["socket_map"][websocket] = new_player.id
+                
+                # If it's a new team, add it to the game
+                if msg_type == "CREATE_TEAM" or msg_type == "JOIN_SOLO":
+                    game["teams"][target_team.id] = target_team
 
                 target_team.add_member(new_player)
                 

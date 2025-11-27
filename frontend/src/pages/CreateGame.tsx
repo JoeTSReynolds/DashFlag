@@ -81,15 +81,15 @@ export default function CreateGame() {
                     <div className="flex gap-4">
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Days</span></label>
-                            <input type="number" min="0" className="input input-bordered" value={days} onChange={e => setDays(Math.max(0, parseInt(e.target.value) || 0))} />
+                            <input type="number" min="0" className="input input-bordered px-4" value={days} onChange={e => setDays(Math.max(0, parseInt(e.target.value) || 0))} />
                         </div>
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Hours (Max 24)</span></label>
-                            <input type="number" min="0" max="24" className="input input-bordered" value={hours} onChange={e => setHours(Math.min(24, Math.max(0, parseInt(e.target.value) || 0)))} />
+                            <input type="number" min="0" max="24" className="input input-bordered px-4" value={hours} onChange={e => setHours(Math.min(24, Math.max(0, parseInt(e.target.value) || 0)))} />
                         </div>
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Minutes (Max 60)</span></label>
-                            <input type="number" min="0" max="60" className="input input-bordered" value={minutes} onChange={e => setMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} />
+                            <input type="number" min="0" max="60" className="input input-bordered px-4" value={minutes} onChange={e => setMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} />
                         </div>
                     </div>
                 </div>
@@ -97,7 +97,7 @@ export default function CreateGame() {
                 {teamsEnabled && (
                     <div className="form-control w-full max-w-xs mt-4">
                         <label className="label"><span className="label-text">Max Team Size (0 = Unlimited)</span></label>
-                        <input type="number" className="input input-bordered" value={maxTeamSize} onChange={e => setMaxTeamSize(parseInt(e.target.value))} />
+                        <input type="number" className="input input-bordered px-4" value={maxTeamSize} onChange={e => setMaxTeamSize(parseInt(e.target.value))} />
                     </div>
                 )}
             </div>
@@ -119,17 +119,17 @@ export default function CreateGame() {
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="form-control">
                                         <label className="label"><span className="label-text-alt">Points</span></label>
-                                        <input type="number" className="input input-sm input-bordered" 
+                                        <input type="number" className="input input-sm input-bordered px-4" 
                                             value={c.points} onChange={e => updateChallenge(i, 'points', parseInt(e.target.value))} />
                                     </div>
                                     <div className="form-control">
                                         <label className="label"><span className="label-text-alt">Decay Rate</span></label>
-                                        <input type="number" className="input input-sm input-bordered" 
+                                        <input type="number" className="input input-sm input-bordered px-4" 
                                             value={c.decay} onChange={e => updateChallenge(i, 'decay', parseInt(e.target.value))} />
                                     </div>
                                     <div className="form-control">
                                         <label className="label"><span className="label-text-alt">Min Points</span></label>
-                                        <input type="number" className="input input-sm input-bordered" 
+                                        <input type="number" className="input input-sm input-bordered px-4" 
                                             value={c.min_points} onChange={e => updateChallenge(i, 'min_points', parseInt(e.target.value))} />
                                     </div>
                                 </div>
@@ -140,7 +140,7 @@ export default function CreateGame() {
                                 </div>
                                 <div className="form-control mt-2">
                                     <label className="label"><span className="label-text-alt">Flag</span></label>
-                                    <input type="text" className="input input-sm input-bordered font-mono" 
+                                    <input type="text" className="input input-sm input-bordered font-mono px-4" 
                                         value={c.flag} onChange={e => updateChallenge(i, 'flag', e.target.value)} />
                                 </div>
                             </div>

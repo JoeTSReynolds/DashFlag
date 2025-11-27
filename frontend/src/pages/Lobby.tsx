@@ -292,9 +292,10 @@ export default function Lobby() {
     // 1. NICKNAME
     if (viewState === "NICKNAME") return (
         <div className="min-h-screen bg-base-200 flex items-center justify-center">
+            {toast && <div className="toast toast-top toast-center z-50"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
             <div className="card bg-base-100 shadow-xl p-8 w-96">
                 <h2 className="text-2xl font-bold mb-4">Who are you?</h2>
-                <input className="input input-bordered w-full mb-4" placeholder="Nickname" maxLength={16} value={nickname} onChange={e => setNickname(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()} />
+                <input className="input input-bordered w-full mb-4 px-4" placeholder="Nickname" maxLength={16} value={nickname} onChange={e => setNickname(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()} />
                 <button className="btn btn-primary w-full px-8" onClick={handleNicknameSubmit}>
                     {teamsEnabled ? "Next" : "Join Game"}
                 </button>
@@ -305,17 +306,18 @@ export default function Lobby() {
     // 2. TEAM SELECT
     if (viewState === "TEAM_SELECT") return (
         <div className="min-h-screen bg-base-200 flex items-center justify-center p-4">
+            {toast && <div className="toast toast-top toast-center z-50"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
             <div className="card bg-base-100 shadow-xl p-8 max-w-4xl w-full">
                 <h2 className="text-3xl font-bold mb-8 text-center">Choose Your Path</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-base-200 p-6 rounded-box text-center">
                         <h3 className="font-bold text-lg mb-4">Create Team</h3>
-                        <input className="input input-bordered w-full mb-4" placeholder="Team Name" maxLength={16} value={teamName} onChange={e => setTeamName(e.target.value)} />
+                        <input className="input input-bordered w-full mb-4 px-4" placeholder="Team Name" maxLength={16} value={teamName} onChange={e => setTeamName(e.target.value)} />
                         <button className="btn btn-primary w-full px-8" onClick={() => joinGame("CREATE_TEAM")}>Create</button>
                     </div>
                     <div className="bg-base-200 p-6 rounded-box text-center">
                         <h3 className="font-bold text-lg mb-4">Join Team</h3>
-                        <input className="input input-bordered w-full mb-4" placeholder="4-Digit Code" maxLength={4} value={teamCodeJoin} onChange={e => setTeamCodeJoin(e.target.value)} />
+                        <input className="input input-bordered w-full mb-4 px-4" placeholder="4-Digit Code" maxLength={4} value={teamCodeJoin} onChange={e => setTeamCodeJoin(e.target.value)} />
                         <button className="btn btn-secondary w-full px-8" onClick={() => joinGame("JOIN_TEAM")}>Join</button>
                     </div>
                     <div className="bg-base-200 p-6 rounded-box text-center flex flex-col justify-between">
@@ -371,7 +373,7 @@ export default function Lobby() {
                             {!myTeam.is_solo && <span className="text-xs opacity-50 font-mono bg-base-200 px-2 rounded">Code: {myTeam.id}</span>}
                         </div>
                     )}
-                    {!isAdmin && <button className="btn btn-error px-6 shadow-md" onClick={leaveGame}>Leave</button>}
+                    {!isAdmin && <button className="btn btn-error px-6 shadow-md text-red-500" onClick={leaveGame}>Leave</button>}
                 </div>
             </div>
 
@@ -558,7 +560,7 @@ export default function Lobby() {
                             <>
                                 <div className="bg-base-200 p-4 rounded-lg my-4 font-mono text-sm">{selectedChallenge.desc}</div>
                                 <div className="join w-full mt-2">
-                                    <input className="input input-bordered input-primary join-item w-full font-mono" 
+                                    <input className="input input-bordered input-primary join-item w-full font-mono px-4" 
                                         placeholder="format{flag}" value={flagInput} 
                                         onChange={e => setFlagInput(e.target.value)} 
                                         onKeyDown={e => e.key === 'Enter' && submitFlag()} />
