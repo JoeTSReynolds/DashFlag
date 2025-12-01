@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPaperclip } from '@fortawesome/free-solid-svg-icons'
 
+interface Hint {
+    id: string
+    content: string
+    cost: number
+}
+
 interface Challenge {
     id: string
     title: string
@@ -13,6 +19,7 @@ interface Challenge {
     desc: string
     flag: string
     files: string[]
+    hints: Hint[]
     is_premade: boolean
 }
 
@@ -62,6 +69,7 @@ export default function CreateGame() {
           desc: "Description here...",
           flag: "format{flag}",
           files: [],
+          hints: [],
           is_premade: false
       }
       setEditingChallenge(newChal)
@@ -391,6 +399,49 @@ export default function CreateGame() {
                                     </div>
                                 </>
                             )}
+                            
+                            {/* HINTS SECTION (Available for both custom and premade) */}
+                            <div className="divider">Hints</div>
+                            <div className="space-y-2">
+                                {editingChallenge.hints?.map((h, i) => (
+                                    <div key={h.id} className="card bg-base-200 p-2 border border-base-300">
+                                        <div className="flex gap-2 mb-2">
+                                            <div className="form-control w-24">
+                                                <label className="label py-0"><span className="label-text-alt">Cost</span></label>
+                                                <input type="number" min="0" className="input input-bordered input-xs" value={h.cost} 
+                                                    onChange={e => {
+                                                        const newHints = [...(editingChallenge.hints || [])]
+                                                        newHints[i] = {...h, cost: Math.max(0, parseInt(e.target.value) || 0)}
+                                                        setEditingChallenge({...editingChallenge, hints: newHints})
+                                                    }} />
+                                            </div>
+                                            {!editingChallenge.is_premade && (
+                                                <button className="btn btn-xs btn-ghost text-error ml-auto" onClick={() => {
+                                                    const newHints = editingChallenge.hints.filter((_, idx) => idx !== i)
+                                                    setEditingChallenge({...editingChallenge, hints: newHints})
+                                                }}>Remove</button>
+                                            )}
+                                        </div>
+                                        <textarea className="textarea textarea-bordered textarea-xs w-full" 
+                                            placeholder="Hint content..."
+                                            value={h.content}
+                                            disabled={editingChallenge.is_premade}
+                                            onChange={e => {
+                                                const newHints = [...(editingChallenge.hints || [])]
+                                                newHints[i] = {...h, content: e.target.value}
+                                                setEditingChallenge({...editingChallenge, hints: newHints})
+                                            }}
+                                        ></textarea>
+                                    </div>
+                                ))}
+                                {!editingChallenge.is_premade && (
+                                    <button className="btn btn-sm btn-outline w-full border-dashed" onClick={() => {
+                                        const newHint: Hint = { id: `h_${Date.now()}`, content: "", cost: 50 }
+                                        setEditingChallenge({...editingChallenge, hints: [...(editingChallenge.hints || []), newHint]})
+                                    }}>+ Add Hint</button>
+                                )}
+                            </div>
+
                             {editingChallenge.is_premade && (
                                 <div className="alert alert-info text-xs">
                                     <span>Content for pre-made challenges cannot be edited. Only scoring values can be adjusted.</span>

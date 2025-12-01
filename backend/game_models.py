@@ -47,6 +47,7 @@ class Team(GameMember):
         self.members: Dict[str, Player] = {} # player_id -> Player
         self.is_solo = is_solo
         self.solves: List[str] = [] # Track team-wide solves to prevent double dipping if needed
+        self.unlocked_hints: Dict[str, List[str]] = {} # ChallengeID -> List of HintIDs
 
     def add_member(self, player: Player):
         self.members[player.id] = player
@@ -67,5 +68,6 @@ class Team(GameMember):
             "name": self.name,
             "score": self.get_points(),
             "is_solo": self.is_solo,
-            "members": [p.to_dict() for p in sorted_members]
+            "members": [p.to_dict() for p in sorted_members],
+            "unlocked_hints": self.unlocked_hints
         }

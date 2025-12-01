@@ -27,6 +27,12 @@ interface SolveLog {
     time_str: string
 }
 
+interface Hint {
+    id: string
+    content?: string // Only present if unlocked (or if we are admin, but admin view is separate)
+    cost: number
+}
+
 interface Challenge {
     id: string
     title: string
@@ -37,6 +43,7 @@ interface Challenge {
     files?: string[]
     solve_history?: SolveLog[] // Only populated for Admins
     flag_mask?: string
+    hints?: Hint[]
 }
 
 export default function Lobby() {
@@ -76,6 +83,10 @@ export default function Lobby() {
     const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
     const [flagInput, setFlagInput] = useState("")
     const [showAdminStats, setShowAdminStats] = useState(false)
+
+    // Hints State
+    const [unlockedHints, setUnlockedHints] = useState<Record<string, string[]>>({}) // ChalID -> HintIDs
+    const [hintContent, setHintContent] = useState<Record<string, string>>({}) // HintID -> Content
 
     // Connection State for UI
     const [connectionError, setConnectionError] = useState<string | null>(null)
@@ -160,6 +171,8 @@ export default function Lobby() {
                 setGameStatus(data.status)
                 if (data.challenges) setChallenges(data.challenges)
                 if (data.endTime) setEndTime(data.endTime)
+                if (data.my_unlocked_hints) setUnlockedHints(data.my_unlocked_hints)
+                if (data.hint_content) setHintContent(prev => ({...prev, ...data.hint_content}))
             }
             else if (data.type === "KICKED") {
                 localStorage.removeItem(`dashflag_pid_${gameCode}`)
@@ -261,17 +274,37 @@ export default function Lobby() {
     }
 
     const submitFlag = () => {
-        if (socketRef.current && selectedChallenge) {
+        if (!socketRef.current || !selectedChallenge) return
+        socketRef.current.send(JSON.stringify({
+            type: "SUBMIT_FLAG",
+            payload: { challengeId: selectedChallenge.id, flag: flagInput }
+        }))
+        setFlagInput("")
+    }
+
+    const buyHint = (challengeId: string, hintId: string, cost: number) => {
+        if (!socketRef.current) return
+        if (confirm(`Are you sure you want to buy this hint? It will reduce the potential points for this challenge by ${cost}.`)) {
             socketRef.current.send(JSON.stringify({
-                type: "SUBMIT_FLAG",
-                challengeId: selectedChallenge.id,
-                flag: flagInput
+                type: "BUY_HINT",
+                payload: { challengeId, hintId }
             }))
-            setFlagInput("")
         }
     }
 
-    // --- RENDER VIEWS ---
+    const getEffectivePoints = (c: Challenge) => {
+        let p = c.points
+        if (unlockedHints[c.id] && c.hints) {
+            c.hints.forEach(h => {
+                if (unlockedHints[c.id].includes(h.id)) {
+                    p -= h.cost
+                }
+            })
+        }
+        return Math.max(0, p)
+    }
+
+    // --- RENDER ---
 
     // 0. CONNECTING / ERRORS
     if (connectionError === 'INVALID_CODE') return (
@@ -485,7 +518,7 @@ export default function Lobby() {
                                     >
                                         <div className="card-body items-center text-center">
                                             <div className="badge badge-ghost mb-2">{c.category}</div>
-                                            <h2 className="card-title text-4xl font-black">{c.points}</h2>
+                                            <h2 className="card-title text-4xl font-black">{getEffectivePoints(c)}</h2>
                                             <p className="font-bold opacity-75">{c.title}</p>
                                             <div className="badge badge-outline mt-2 text-xs">{c.solves} solves</div>
                                             {isSolved && <div className="badge badge-success font-bold text-white mt-2">SOLVED</div>}
@@ -558,7 +591,7 @@ export default function Lobby() {
                     <div className="modal-box border border-primary shadow-2xl">
                         <button onClick={() => setSelectedChallenge(null)} className="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
                         <h3 className="text-lg font-bold text-primary">{selectedChallenge.title}</h3>
-                        <div className="badge badge-secondary mb-4">{selectedChallenge.points} PTS</div>
+                        <div className="badge badge-secondary mb-4">{getEffectivePoints(selectedChallenge)} PTS</div>
                         
                         {/* ADMIN VIEW: SOLVE HISTORY */}
                         {isAdmin ? (
@@ -600,6 +633,32 @@ export default function Lobby() {
                                                     </a>
                                                 )
                                             })}
+                                        </div>
+                                    )}
+
+                                    {/* HINTS */}
+                                    {selectedChallenge.hints && selectedChallenge.hints.length > 0 && (
+                                        <div className="mt-4 border-t border-base-300 pt-4">
+                                            <h4 className="font-bold text-xs opacity-50 mb-2">HINTS</h4>
+                                            <div className="space-y-2">
+                                                {selectedChallenge.hints.map(h => {
+                                                    const isUnlocked = unlockedHints[selectedChallenge.id]?.includes(h.id)
+                                                    return (
+                                                        <div key={h.id} className={`p-2 rounded border ${isUnlocked ? 'bg-base-100 border-success/30' : 'bg-base-300 border-base-300'}`}>
+                                                            {isUnlocked ? (
+                                                                <div className="text-sm">{hintContent[h.id] || "Loading..."}</div>
+                                                            ) : (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-xs opacity-50">Hint Locked</span>
+                                                                    <button className="btn btn-xs btn-warning btn-outline" onClick={() => buyHint(selectedChallenge.id, h.id, h.cost)}>
+                                                                        Unlock (-{h.cost} pts)
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

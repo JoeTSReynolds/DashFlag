@@ -117,6 +117,7 @@ class GameManager:
                     "files": c.files,
                     "solves": solves,
                     "flag_mask": self.generate_flag_mask(c.flag),
+                    "hints": [{"id": h.id, "cost": h.cost} for h in c.hints],
                     # Players don't get the history log to save bandwidth/prevent cheating
                 })
 
@@ -149,9 +150,22 @@ class GameManager:
         }
         
         for team in game["teams"].values():
+            # Prepare unlocked hint content for this team
+            unlocked_content = {}
+            for c in game["config"].challenges:
+                if c.id in team.unlocked_hints:
+                    for h in c.hints:
+                        if h.id in team.unlocked_hints[c.id]:
+                            unlocked_content[h.id] = h.content
+
+            # Create a team-specific message
+            team_msg = player_msg.copy()
+            team_msg["my_unlocked_hints"] = team.unlocked_hints
+            team_msg["hint_content"] = unlocked_content
+
             for player in team.members.values():
                 for sock in player.sockets:
-                    try: await sock.send_text(json.dumps(player_msg))
+                    try: await sock.send_text(json.dumps(team_msg))
                     except: pass
 
 manager = GameManager()
@@ -372,6 +386,57 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str):
                     del game["teams"][t_id]
                 await manager.broadcast_status(game_code)
 
+            # --- HINTS ---
+            if msg_type == "BUY_HINT":
+                if game["status"] != "active": continue
+                
+                p_id = game["socket_map"].get(websocket)
+                if not p_id: continue
+
+                player_team = None
+                for team in game["teams"].values():
+                    if p_id in team.members:
+                        player_team = team
+                        break
+                
+                if not player_team: continue
+
+                # Extract from nested payload if present
+                data_payload = payload.get("payload", payload)
+                chal_id = data_payload.get("challengeId")
+                hint_id = data_payload.get("hintId")
+                
+                challenge_cfg = next((c for c in game["config"].challenges if c.id == chal_id), None)
+                if not challenge_cfg: continue
+                
+                # Find hint and its index
+                hint = None
+                hint_index = -1
+                for i, h in enumerate(challenge_cfg.hints):
+                    if h.id == hint_id:
+                        hint = h
+                        hint_index = i
+                        break
+                
+                if not hint: continue
+
+                # Initialize if needed
+                if chal_id not in player_team.unlocked_hints:
+                    player_team.unlocked_hints[chal_id] = []
+
+                # Check if previous hint is unlocked
+                if hint_index > 0:
+                    prev_hint = challenge_cfg.hints[hint_index - 1]
+                    if prev_hint.id not in player_team.unlocked_hints[chal_id]:
+                        await websocket.send_json({"type": "TOAST", "msg": "You must unlock previous hints first!", "color": "error"})
+                        continue
+
+                if hint_id not in player_team.unlocked_hints[chal_id]:
+                    player_team.unlocked_hints[chal_id].append(hint_id)
+                    # Broadcast update so they get the content
+                    await manager.broadcast_status(game_code)
+                    await websocket.send_json({"type": "TOAST", "msg": f"Hint unlocked! -{hint.cost} potential points", "color": "warning"})
+
             # --- FLAGS ---
             if msg_type == "SUBMIT_FLAG":
                 if game["status"] != "active": continue
@@ -389,8 +454,10 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str):
                 
                 if not player_team: continue
 
-                chal_id = payload.get("challengeId")
-                flag_guess = payload.get("flag")
+                # Extract from nested payload if present
+                data_payload = payload.get("payload", payload)
+                chal_id = data_payload.get("challengeId")
+                flag_guess = data_payload.get("flag")
                 challenge_cfg = next((c for c in game["config"].challenges if c.id == chal_id), None)
 
                 if challenge_cfg:
@@ -398,7 +465,16 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str):
                         await websocket.send_json({"type": "TOAST", "msg": "You already solved this!", "color": "info"})
                     elif flag_guess == challenge_cfg.flag:
                         solves_count = game["challenge_stats"][chal_id]
-                        points = manager.calculate_points(challenge_cfg, solves_count)
+                        base_points = manager.calculate_points(challenge_cfg, solves_count)
+                        
+                        # Calculate penalties
+                        penalties = 0
+                        if chal_id in player_team.unlocked_hints:
+                            for h in challenge_cfg.hints:
+                                if h.id in player_team.unlocked_hints[chal_id]:
+                                    penalties += h.cost
+                        
+                        points = max(base_points - penalties, 0)
                         
                         # Update Stats
                         current_player.score += points
