@@ -36,6 +36,7 @@ interface Challenge {
     desc?: string
     files?: string[]
     solve_history?: SolveLog[] // Only populated for Admins
+    flag_mask?: string
 }
 
 export default function Lobby() {
@@ -604,7 +605,7 @@ export default function Lobby() {
                                 </div>
                                 <div className="join w-full mt-2">
                                     <input className="input input-bordered input-primary join-item w-full font-mono px-4" 
-                                        placeholder="format{flag}" value={flagInput} 
+                                        placeholder={selectedChallenge.flag_mask || "format{flag}"} value={flagInput} 
                                         onChange={e => setFlagInput(e.target.value)} 
                                         onKeyDown={e => e.key === 'Enter' && submitFlag()} />
                                     <button className="btn btn-primary join-item px-8" onClick={submitFlag}>SUBMIT</button>

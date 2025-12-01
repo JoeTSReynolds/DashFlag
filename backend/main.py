@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 import shutil
 
 from game_models import Player, Team
-from challenges import Challenge
+from challenges import Challenge, PREMADE_CHALLENGES
 
 app = FastAPI()
 
@@ -67,11 +67,22 @@ class GameManager:
             "teams": {},          
             "socket_map": {},     
             "challenge_stats": {c.id: 0 for c in config.challenges}, 
-            "detailed_solves": {c.id: [] for c in config.challenges}, # Log history
-            "start_time": None, # Track when game started
+            "detailed_solves": {c.id: [] for c in config.challenges}, # NEW: Log history
+            "start_time": None, # NEW: Track when game started
             "end_time": None
         }
         return code, token
+
+    def generate_flag_mask(self, flag: str) -> str:
+        try:
+            start = flag.index('{')
+            end = flag.rindex('}')
+            prefix = flag[:start]
+            content = flag[start+1:end]
+            masked_content = "".join([c if c == '_' else '*' for c in content])
+            return f"{prefix}{{{masked_content}}}"
+        except ValueError:
+            return "format{flag}"
 
     def calculate_points(self, challenge_config, solve_count):
         drop = solve_count * challenge_config.decay
@@ -105,6 +116,7 @@ class GameManager:
                     "desc": c.desc,
                     "files": c.files,
                     "solves": solves,
+                    "flag_mask": self.generate_flag_mask(c.flag),
                     # Players don't get the history log to save bandwidth/prevent cheating
                 })
 
@@ -163,6 +175,10 @@ async def upload_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, file_object)
         
     return {"filename": safe_filename, "url": f"/uploads/{os.path.basename(file_location)}"}
+
+@app.get("/api/premade-challenges")
+async def get_premade_challenges():
+    return PREMADE_CHALLENGES
 
 @app.websocket("/ws/{game_code}")
 async def websocket_endpoint(websocket: WebSocket, game_code: str):

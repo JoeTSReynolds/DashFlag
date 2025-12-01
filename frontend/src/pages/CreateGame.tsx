@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPaperclip } from '@fortawesome/free-solid-svg-icons'
@@ -16,20 +16,31 @@ interface Challenge {
     is_premade: boolean
 }
 
-// Pre-made Challenges
-const PREMADE_CHALLENGES: Challenge[] = [
-    {id: "misc1", title: "Sanity Check", category: "MISC", points: 100, min_points: 100, decay: 0, desc: "The flag is format{welcome}", flag: "format{welcome}", files: [], is_premade: true},
-    {id: "web1", title: "Inspector Gadget", category: "WEB", points: 500, min_points: 100, decay: 50, desc: "Check the HTML comments.", flag: "format{html_master}", files: [], is_premade: true},
-    {id: "crypto1", title: "Caesar Salad", category: "CRYPTO", points: 400, min_points: 100, decay: 30, desc: "Rot13 is classic.", flag: "format{rot13_is_easy}", files: [], is_premade: true},
-    {id: "bin1", title: "Buffer Ouch", category: "PWN", points: 800, min_points: 200, decay: 100, desc: "Overflow the buffer.", flag: "format{segfault}", files: [], is_premade: true},
-]
-
 export default function CreateGame() {
   const navigate = useNavigate()
   const [maxTeamSize, setMaxTeamSize] = useState(0) // 0 = unlimited
   const [teamsEnabled, setTeamsEnabled] = useState(true) 
   const [selectedChallenges, setSelectedChallenges] = useState<Challenge[]>([])
+  const [premadeChallenges, setPremadeChallenges] = useState<Challenge[]>([])
   const [loading, setLoading] = useState(false)
+  
+  useEffect(() => {
+      const fetchPremade = async () => {
+          try {
+              const apiUrl = import.meta.env.VITE_API_URL || ''
+              const res = await fetch(`${apiUrl}/api/premade-challenges`, {
+                  headers: { "ngrok-skip-browser-warning": "true" }
+              })
+              if (res.ok) {
+                  const data = await res.json()
+                  setPremadeChallenges(data)
+              }
+          } catch (e) {
+              console.error("Failed to fetch premade challenges", e)
+          }
+      }
+      fetchPremade()
+  }, [])
   
   // Editing State
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null)
@@ -59,6 +70,14 @@ export default function CreateGame() {
 
   const saveChallenge = () => {
       if (!editingChallenge) return
+
+      if (!editingChallenge.is_premade) {
+          const flagRegex = /^[a-zA-Z0-9_-]+{[a-zA-Z0-9_-]+}$/
+          if (!flagRegex.test(editingChallenge.flag)) {
+              alert("Invalid Flag Format!\nMust be: prefix{content}\n- Prefix: Alphanumeric, _, -\n- Content: Alphanumeric, _, -\n- Both must be non-empty.")
+              return
+          }
+      }
       
       setSelectedChallenges(prev => {
           const exists = prev.find(c => c.id === editingChallenge.id)
@@ -249,7 +268,7 @@ export default function CreateGame() {
             <div className="card-body">
                 <h2 className="card-title mb-4">Pre-made Library</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {PREMADE_CHALLENGES.map((c) => {
+                    {premadeChallenges.map((c) => {
                         const isSelected = selectedChallenges.some(sc => sc.id === c.id)
                         return (
                             <div key={c.id} 
