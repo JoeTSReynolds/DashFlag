@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Confetti from 'react-confetti'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPaperclip, faCrown } from '@fortawesome/free-solid-svg-icons'
 
 type ViewState = 'LOADING' | 'AUTH' | 'NICKNAME' | 'TEAM_SELECT' | 'LOBBY' | 'ADMIN_VIEW'
 
@@ -32,6 +34,7 @@ interface Challenge {
     points: number
     solves: number
     desc?: string
+    files?: string[]
     solve_history?: SolveLog[] // Only populated for Admins
 }
 
@@ -54,9 +57,14 @@ export default function Lobby() {
 
     // User Info
     const [nickname, setNickname] = useState("")
+    // const { code } = useParams() // Unused
     const [myPlayerId, setMyPlayerId] = useState<string | null>(null)
+    // const [game, setGame] = useState<any>(null)
     const [myTeam, setMyTeam] = useState<{id: string, name: string, is_solo: boolean} | null>(null)
     const [mySolves, setMySolves] = useState<string[]>([])
+    
+    // Debug
+    useEffect(() => { if(myPlayerId) console.log("My Player ID:", myPlayerId) }, [myPlayerId])
     
     // Admin Info
     const [isAdmin, setIsAdmin] = useState(false)
@@ -300,7 +308,7 @@ export default function Lobby() {
     // 1. NICKNAME
     if (viewState === "NICKNAME") return (
         <div className="min-h-screen bg-base-200 flex items-center justify-center">
-            {toast && <div className="toast toast-top toast-center z-50"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
+            {toast && <div className="toast toast-top toast-center z-[100]"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
             <div className="card bg-base-100 shadow-xl p-8 w-96">
                 <h2 className="text-2xl font-bold mb-4">Who are you?</h2>
                 <input className="input input-bordered w-full mb-4 px-4" placeholder="Nickname" maxLength={16} value={nickname} onChange={e => setNickname(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNicknameSubmit()} />
@@ -314,7 +322,7 @@ export default function Lobby() {
     // 2. TEAM SELECT
     if (viewState === "TEAM_SELECT") return (
         <div className="min-h-screen bg-base-200 flex items-center justify-center p-4">
-            {toast && <div className="toast toast-top toast-center z-50"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
+            {toast && <div className="toast toast-top toast-center z-[100]"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
             <div className="card bg-base-100 shadow-xl p-8 max-w-4xl w-full">
                 <h2 className="text-3xl font-bold mb-8 text-center">Choose Your Path</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -341,7 +349,7 @@ export default function Lobby() {
     // 3. MAIN GAME
     if (viewState === "LOBBY" || viewState === "ADMIN_VIEW") return (
         <div className="flex flex-col h-screen bg-base-200 p-6 overflow-hidden">
-            {toast && <div className="toast toast-top toast-center z-50"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
+            {toast && <div className="toast toast-top toast-center z-[100]"><div className={`alert alert-${toast.color} shadow-lg font-bold`}><span>{toast.msg}</span></div></div>}
             {gameStatus === 'ended' && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} className="z-50 pointer-events-none" />}
 
             {/* HEADER - Increased Gap and Padding */}
@@ -395,7 +403,12 @@ export default function Lobby() {
                             <div key={team.id} className="bg-base-200 rounded-lg overflow-hidden transition-all">
                                 <div className="p-3 flex justify-between items-center cursor-pointer hover:bg-base-300" onClick={() => !team.is_solo && toggleTeamExpand(team.id)}>
                                     <div className="flex items-center gap-3">
-                                        <span className={`font-mono font-bold w-6 opacity-50 ${i < 3 ? 'text-warning' : ''}`}>#{i+1}</span>
+                                        <span className={`font-mono font-bold w-6 ${
+                                            i === 0 ? 'text-yellow-400' : 
+                                            i === 1 ? 'text-slate-400' : 
+                                            i === 2 ? 'text-orange-400' : 
+                                            'opacity-50'
+                                        }`}>#{i+1}</span>
                                         <div className="flex flex-col">
                                             <span className={`font-bold ${team.id === myTeam?.id ? 'text-primary' : ''}`}>
                                                 {team.name} 
@@ -423,8 +436,8 @@ export default function Lobby() {
                                         {team.members.map(member => (
                                             <div key={member.id} className="flex justify-between px-2 py-1 items-center">
                                                 <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full ${member.is_connected ? 'bg-success' : 'bg-error'}`}></div>
-                                                    <span>{member.name}</span>
+                                                    {member.id === myPlayerId && <div className="w-2 h-2 rounded-full bg-success"></div>}
+                                                    <span className={member.id === myPlayerId ? "font-bold text-primary" : ""}>{member.name}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-mono opacity-70">{member.score} pts</span>
@@ -517,7 +530,7 @@ export default function Lobby() {
                                 {/* 1st */}
                                 {leaderboard.length > 0 && (
                                     <div className={`flex flex-col items-center p-4 rounded-t-lg border-t-4 w-40 h-64 justify-end shadow-2xl shadow-primary/20 transition-all ${getRankStyle(0)}`}>
-                                        <div className="text-5xl mb-4">👑</div>
+                                        <div className="text-5xl mb-4"><FontAwesomeIcon icon={faCrown} /></div>
                                         <div className="font-bold text-2xl mb-2 truncate max-w-full w-full text-center">{leaderboard[0].name}</div>
                                         <div className="text-4xl font-black">{leaderboard[0].score}</div>
                                         <div className="mt-2 font-mono font-bold">1ST</div>
@@ -566,7 +579,29 @@ export default function Lobby() {
                         ) : (
                             // PLAYER VIEW: INPUT
                             <>
-                                <div className="bg-base-200 p-4 rounded-lg my-4 font-mono text-sm">{selectedChallenge.desc}</div>
+                                <div className="bg-base-200 p-4 rounded-lg my-4 font-mono text-sm">
+                                    <p className="mb-4">{selectedChallenge.desc}</p>
+                                    {selectedChallenge.files && selectedChallenge.files.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 border-t border-base-300 pt-4">
+                                            {selectedChallenge.files.map((f, i) => {
+                                                // Handle "NAME|URL" format
+                                                const parts = f.split('|')
+                                                const displayName = parts.length > 1 ? parts[0] : f.split('/').pop()
+                                                const fileUrl = parts.length > 1 ? parts[1] : f
+
+                                                // Construct full URL if it's a relative path
+                                                const apiUrl = import.meta.env.VITE_API_URL || ''
+                                                const url = fileUrl.startsWith('http') ? fileUrl : `${apiUrl}${fileUrl}`
+                                                
+                                                return (
+                                                    <a key={i} href={url} download target="_blank" rel="noopener noreferrer" className="btn btn-xs btn-outline gap-2">
+                                                        <FontAwesomeIcon icon={faPaperclip} /> {displayName}
+                                                    </a>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="join w-full mt-2">
                                     <input className="input input-bordered input-primary join-item w-full font-mono px-4" 
                                         placeholder="format{flag}" value={flagInput} 

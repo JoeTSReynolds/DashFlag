@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 export default function Home() {
   const [code, setCode] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [loading] = useState(false)
   const navigate = useNavigate()
 
   const createGame = () => {
@@ -11,20 +11,9 @@ export default function Home() {
   }
 
   // const createGame = async () => {
-  //   setLoading(true)
-  //   try {
-  //     const response = await fetch("http://localhost:8000/create", { method: "POST" })
+  //     const response = await fetch("http://localhost:8000/api/create", { method: "POST" })
   //     const data = await response.json()
-      
-  //     // Store admin token in localStorage for later use
-  //     localStorage.setItem(`dashflag_admin_${data.gameCode}`, data.adminToken)
-      
   //     navigate(`/lobby/${data.gameCode}`)
-  //   } catch (error) {
-  //     alert("Failed to create game server!")
-  //   } finally {
-  //     setLoading(false)
-  //   }
   // }
 
   const joinGame = () => {

@@ -1,30 +1,116 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPaperclip } from '@fortawesome/free-solid-svg-icons'
 
-// Default Challenges
-const DEFAULT_CHALLENGES = [
-    {id: "misc1", title: "Sanity Check", category: "MISC", points: 100, min_points: 100, decay: 0, desc: "The flag is format{welcome}", flag: "format{welcome}"},
-    {id: "web1", title: "Inspector Gadget", category: "WEB", points: 500, min_points: 100, decay: 50, desc: "Check the HTML comments.", flag: "format{html_master}"},
-    {id: "crypto1", title: "Caesar Salad", category: "CRYPTO", points: 400, min_points: 100, decay: 30, desc: "Rot13 is classic.", flag: "format{rot13_is_easy}"},
-    {id: "bin1", title: "Buffer Ouch", category: "PWN", points: 800, min_points: 200, decay: 100, desc: "Overflow the buffer.", flag: "format{segfault}"},
+interface Challenge {
+    id: string
+    title: string
+    category: string
+    points: number
+    min_points: number
+    decay: number
+    desc: string
+    flag: string
+    files: string[]
+    is_premade: boolean
+}
+
+// Pre-made Challenges
+const PREMADE_CHALLENGES: Challenge[] = [
+    {id: "misc1", title: "Sanity Check", category: "MISC", points: 100, min_points: 100, decay: 0, desc: "The flag is format{welcome}", flag: "format{welcome}", files: [], is_premade: true},
+    {id: "web1", title: "Inspector Gadget", category: "WEB", points: 500, min_points: 100, decay: 50, desc: "Check the HTML comments.", flag: "format{html_master}", files: [], is_premade: true},
+    {id: "crypto1", title: "Caesar Salad", category: "CRYPTO", points: 400, min_points: 100, decay: 30, desc: "Rot13 is classic.", flag: "format{rot13_is_easy}", files: [], is_premade: true},
+    {id: "bin1", title: "Buffer Ouch", category: "PWN", points: 800, min_points: 200, decay: 100, desc: "Overflow the buffer.", flag: "format{segfault}", files: [], is_premade: true},
 ]
 
 export default function CreateGame() {
   const navigate = useNavigate()
   const [maxTeamSize, setMaxTeamSize] = useState(0) // 0 = unlimited
   const [teamsEnabled, setTeamsEnabled] = useState(true) 
-  const [challenges, setChallenges] = useState(DEFAULT_CHALLENGES)
+  const [selectedChallenges, setSelectedChallenges] = useState<Challenge[]>([])
   const [loading, setLoading] = useState(false)
   
+  // Editing State
+  const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
   // Duration State
   const [days, setDays] = useState(0)
   const [hours, setHours] = useState(0)
   const [minutes, setMinutes] = useState(30)
 
-  const updateChallenge = (index: number, field: string, value: any) => {
-      const newChals = [...challenges]
-      newChals[index] = { ...newChals[index], [field]: value }
-      setChallenges(newChals)
+  const addCustomChallenge = () => {
+      const newChal: Challenge = {
+          id: `custom_${Date.now()}`,
+          title: "New Challenge",
+          category: "MISC",
+          points: 100,
+          min_points: 100,
+          decay: 0,
+          desc: "Description here...",
+          flag: "format{flag}",
+          files: [],
+          is_premade: false
+      }
+      setEditingChallenge(newChal)
+      setIsEditModalOpen(true)
+  }
+
+  const saveChallenge = () => {
+      if (!editingChallenge) return
+      
+      setSelectedChallenges(prev => {
+          const exists = prev.find(c => c.id === editingChallenge.id)
+          if (exists) {
+              return prev.map(c => c.id === editingChallenge.id ? editingChallenge : c)
+          } else {
+              return [...prev, editingChallenge]
+          }
+      })
+      setIsEditModalOpen(false)
+      setEditingChallenge(null)
+  }
+
+  const deleteChallenge = (id: string) => {
+      setSelectedChallenges(prev => prev.filter(c => c.id !== id))
+  }
+
+  const togglePremade = (premade: Challenge) => {
+      const exists = selectedChallenges.find(c => c.id === premade.id)
+      if (exists) {
+          deleteChallenge(premade.id)
+      } else {
+          setSelectedChallenges(prev => [...prev, premade])
+      }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || !editingChallenge) return
+      const file = e.target.files[0]
+      const formData = new FormData()
+      formData.append('file', file)
+
+      try {
+          const apiUrl = import.meta.env.VITE_API_URL || ''
+          const res = await fetch(`${apiUrl}/api/upload`, {
+              method: 'POST',
+              headers: { "ngrok-skip-browser-warning": "true" },
+              body: formData
+          })
+          
+          if (!res.ok) {
+              const err = await res.json()
+              alert(`Upload failed: ${JSON.stringify(err)}`)
+              return
+          }
+
+          const data = await res.json()
+          setEditingChallenge(prev => prev ? ({...prev, files: [...prev.files, data.url]}) : null)
+      } catch (err) {
+          console.error(err)
+          alert("Upload failed: Network error")
+      }
   }
 
   const handleCreate = async () => {
@@ -35,13 +121,13 @@ export default function CreateGame() {
               max_team_size: teamsEnabled ? maxTeamSize : 1,
               max_players: 0,
               teams_enabled: teamsEnabled,
-              challenges: challenges,
+              challenges: selectedChallenges,
               duration_seconds: totalSeconds > 0 ? totalSeconds : 1800
           }
           
-          // Use relative path so it goes through Vite proxy (works for localhost AND ngrok)
+          // Use relative path so it goes through Vite proxy (works for localhost and ngrok)
           const apiUrl = import.meta.env.VITE_API_URL || ''
-          const response = await fetch(`${apiUrl}/create`, { 
+          const response = await fetch(`${apiUrl}/api/create`, { 
               method: "POST",
               headers: { 
                   "Content-Type": "application/json",
@@ -77,7 +163,7 @@ export default function CreateGame() {
 
   return (
     <div className="min-h-screen bg-base-200 p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-4xl font-bold mb-8 text-primary">Configure CTF</h1>
         
         {/* SETTINGS CARD */}
@@ -101,15 +187,15 @@ export default function CreateGame() {
                     <div className="flex gap-4">
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Days</span></label>
-                            <input type="number" min="0" className="input input-bordered px-4" value={days} onChange={e => setDays(Math.max(0, parseInt(e.target.value) || 0))} />
+                            <input type="number" min="0" className="input input-bordered px-4 w-full" value={days} onChange={e => setDays(Math.max(0, parseInt(e.target.value) || 0))} />
                         </div>
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Hours (Max 24)</span></label>
-                            <input type="number" min="0" max="24" className="input input-bordered px-4" value={hours} onChange={e => setHours(Math.min(24, Math.max(0, parseInt(e.target.value) || 0)))} />
+                            <input type="number" min="0" max="24" className="input input-bordered px-4 w-full" value={hours} onChange={e => setHours(Math.min(24, Math.max(0, parseInt(e.target.value) || 0)))} />
                         </div>
                         <div className="form-control w-full">
                             <label className="label"><span className="label-text-alt">Minutes (Max 60)</span></label>
-                            <input type="number" min="0" max="60" className="input input-bordered px-4" value={minutes} onChange={e => setMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} />
+                            <input type="number" min="0" max="60" className="input input-bordered px-4 w-full" value={minutes} onChange={e => setMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} />
                         </div>
                     </div>
                 </div>
@@ -117,51 +203,39 @@ export default function CreateGame() {
                 {teamsEnabled && (
                     <div className="form-control w-full max-w-xs mt-4">
                         <label className="label"><span className="label-text">Max Team Size (0 = Unlimited)</span></label>
-                        <input type="number" className="input input-bordered px-4" value={maxTeamSize} onChange={e => setMaxTeamSize(parseInt(e.target.value))} />
+                        <input type="number" className="input input-bordered px-4 w-full" value={maxTeamSize} onChange={e => setMaxTeamSize(parseInt(e.target.value))} />
                     </div>
                 )}
             </div>
         </div>
 
-        {/* CHALLENGES CARD */}
+        {/* SELECTED CHALLENGES */}
         <div className="card bg-base-100 shadow-xl mb-8">
             <div className="card-body">
-                <h2 className="card-title mb-4">Challenge Library</h2>
-                <div className="space-y-4">
-                    {challenges.map((c, i) => (
-                        <div key={c.id} className="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box">
-                            <input type="checkbox" /> 
-                            <div className="collapse-title text-xl font-medium flex justify-between">
-                                <span>{c.title} <span className="badge badge-sm">{c.category}</span></span>
-                                <span className="font-mono">{c.points} pts</span>
-                            </div>
-                            <div className="collapse-content bg-base-200 pt-4">
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="form-control">
-                                        <label className="label"><span className="label-text-alt">Points</span></label>
-                                        <input type="number" className="input input-sm input-bordered px-4" 
-                                            value={c.points} onChange={e => updateChallenge(i, 'points', parseInt(e.target.value))} />
-                                    </div>
-                                    <div className="form-control">
-                                        <label className="label"><span className="label-text-alt">Decay Rate</span></label>
-                                        <input type="number" className="input input-sm input-bordered px-4" 
-                                            value={c.decay} onChange={e => updateChallenge(i, 'decay', parseInt(e.target.value))} />
-                                    </div>
-                                    <div className="form-control">
-                                        <label className="label"><span className="label-text-alt">Min Points</span></label>
-                                        <input type="number" className="input input-sm input-bordered px-4" 
-                                            value={c.min_points} onChange={e => updateChallenge(i, 'min_points', parseInt(e.target.value))} />
-                                    </div>
+                <h2 className="card-title mb-4">Selected Challenges ({selectedChallenges.length})</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* ADD BUTTON */}
+                    <div onClick={addCustomChallenge} className="card border-2 border-dashed border-base-300 hover:border-primary cursor-pointer flex items-center justify-center min-h-[200px] transition-all hover:bg-base-200">
+                        <span className="text-6xl text-base-300">+</span>
+                        <span className="font-bold mt-2 text-base-content/50">Add Custom</span>
+                    </div>
+
+                    {/* CARDS */}
+                    {selectedChallenges.map((c) => (
+                        <div key={c.id} className="card bg-base-200 border border-base-300 shadow-sm">
+                            <div className="card-body p-4">
+                                <div className="flex justify-between items-start">
+                                    <div className="badge badge-primary">{c.category}</div>
+                                    <div className="font-mono font-bold">{c.points} pts</div>
                                 </div>
-                                <div className="form-control mt-2">
-                                    <label className="label"><span className="label-text-alt">Description</span></label>
-                                    <textarea className="textarea textarea-bordered h-24" 
-                                        value={c.desc} onChange={e => updateChallenge(i, 'desc', e.target.value)}></textarea>
-                                </div>
-                                <div className="form-control mt-2">
-                                    <label className="label"><span className="label-text-alt">Flag</span></label>
-                                    <input type="text" className="input input-sm input-bordered font-mono px-4" 
-                                        value={c.flag} onChange={e => updateChallenge(i, 'flag', e.target.value)} />
+                                <h3 className="font-bold text-lg mt-2">{c.title}</h3>
+                                <p className="text-xs opacity-70 truncate">{c.desc}</p>
+                                <div className="card-actions justify-end mt-4">
+                                    <button className="btn btn-sm btn-ghost px-4" onClick={() => {
+                                        setEditingChallenge(c)
+                                        setIsEditModalOpen(true)
+                                    }}>Edit</button>
+                                    <button className="btn btn-sm btn-error btn-outline px-4" onClick={() => deleteChallenge(c.id)}>Delete</button>
                                 </div>
                             </div>
                         </div>
@@ -170,9 +244,149 @@ export default function CreateGame() {
             </div>
         </div>
 
+        {/* PRE-MADE LIBRARY */}
+        <div className="card bg-base-100 shadow-xl mb-8 opacity-90">
+            <div className="card-body">
+                <h2 className="card-title mb-4">Pre-made Library</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {PREMADE_CHALLENGES.map((c) => {
+                        const isSelected = selectedChallenges.some(sc => sc.id === c.id)
+                        return (
+                            <div key={c.id} 
+                                onClick={() => !isSelected && togglePremade(c)}
+                                className={`card border border-base-300 cursor-pointer transition-all hover:-translate-y-1
+                                    ${isSelected ? 'opacity-40 grayscale cursor-not-allowed bg-base-200' : 'bg-base-100 hover:border-primary shadow-sm'}`}
+                            >
+                                <div className="card-body p-4">
+                                    <div className="badge badge-ghost">{c.category}</div>
+                                    <h3 className="font-bold">{c.title}</h3>
+                                    <div className="font-mono text-sm opacity-50">{c.points} pts</div>
+                                    {isSelected && <div className="badge badge-success mt-2">ADDED</div>}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+        </div>
+
         <button className={`btn btn-primary btn-lg w-full ${loading ? 'loading' : ''}`} onClick={handleCreate}>
             LAUNCH GAME SERVER
         </button>
+
+        {/* EDIT MODAL */}
+        {isEditModalOpen && editingChallenge && (
+            <div className="modal modal-open bg-black/50">
+                <div className="modal-box w-11/12 max-w-3xl">
+                    <h3 className="font-bold text-lg mb-4">
+                        {editingChallenge.is_premade ? `Edit Scoring: ${editingChallenge.title}` : "Edit Challenge"}
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* LEFT COL: META */}
+                        <div className="space-y-4">
+                            {!editingChallenge.is_premade && (
+                                <>
+                                    <div className="form-control w-full">
+                                        <label className="label"><span className="label-text">Title</span></label>
+                                        <input className="input input-bordered w-full" value={editingChallenge.title} 
+                                            onChange={e => setEditingChallenge({...editingChallenge, title: e.target.value})} />
+                                    </div>
+                                    <div className="form-control w-full">
+                                        <label className="label"><span className="label-text">Category</span></label>
+                                        <select className="select select-bordered w-full" value={editingChallenge.category}
+                                            onChange={e => setEditingChallenge({...editingChallenge, category: e.target.value})}>
+                                            <option>MISC</option><option>WEB</option><option>CRYPTO</option><option>PWN</option><option>REV</option><option>OSINT</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+                            
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="form-control w-full">
+                                    <label className="label"><span className="label-text-alt">Points</span></label>
+                                    <input type="number" className="input input-bordered px-2 w-full" value={editingChallenge.points} 
+                                        onChange={e => setEditingChallenge({...editingChallenge, points: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div className="form-control w-full">
+                                    <label className="label"><span className="label-text-alt">Decay</span></label>
+                                    <input type="number" className="input input-bordered px-2 w-full" value={editingChallenge.decay} 
+                                        onChange={e => setEditingChallenge({...editingChallenge, decay: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div className="form-control w-full">
+                                    <label className="label"><span className="label-text-alt">Min</span></label>
+                                    <input type="number" className="input input-bordered px-2 w-full" value={editingChallenge.min_points} 
+                                        onChange={e => setEditingChallenge({...editingChallenge, min_points: parseInt(e.target.value) || 0})} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COL: CONTENT */}
+                        <div className="space-y-4">
+                            {!editingChallenge.is_premade && (
+                                <>
+                                    <div className="form-control w-full">
+                                        <label className="label"><span className="label-text">Description</span></label>
+                                        <textarea className="textarea textarea-bordered h-24 w-full" value={editingChallenge.desc} 
+                                            onChange={e => setEditingChallenge({...editingChallenge, desc: e.target.value})}></textarea>
+                                    </div>
+                                    <div className="form-control w-full">
+                                        <label className="label"><span className="label-text">Flag</span></label>
+                                        <input className="input input-bordered font-mono w-full" value={editingChallenge.flag} 
+                                            onChange={e => setEditingChallenge({...editingChallenge, flag: e.target.value})} />
+                                    </div>
+                                    
+                                    {/* FILES */}
+                                    <div className="form-control w-full">
+                                        <label className="label"><span className="label-text">Files</span></label>
+                                        <input type="file" className="file-input file-input-bordered w-full" onChange={handleFileUpload} />
+                                        <div className="mt-2 space-y-1">
+                                            {editingChallenge.files.map((f, i) => {
+                                                const fileName = f.split('/').pop() || 'file'
+                                                // Check if it's a custom name format: "REALNAME|URL"
+                                                const parts = f.split('|')
+                                                const displayName = parts.length > 1 ? parts[0] : fileName
+                                                
+                                                return (
+                                                    <div key={i} className="badge badge-outline gap-2 w-full justify-between p-4 h-auto">
+                                                        <div className="flex items-center gap-2 flex-1">
+                                                            <span className="opacity-50"><FontAwesomeIcon icon={faPaperclip} /></span>
+                                                            <input 
+                                                                className="input input-ghost input-xs w-full max-w-[200px] focus:bg-base-200" 
+                                                                value={displayName}
+                                                                onChange={(e) => {
+                                                                    const newName = e.target.value
+                                                                    const url = parts.length > 1 ? parts[1] : f
+                                                                    const newEntry = `${newName}|${url}`
+                                                                    const newFiles = [...editingChallenge.files]
+                                                                    newFiles[i] = newEntry
+                                                                    setEditingChallenge({...editingChallenge, files: newFiles})
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <button onClick={() => setEditingChallenge({...editingChallenge, files: editingChallenge.files.filter((_, idx) => idx !== i)})} className="btn btn-ghost btn-xs">✕</button>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {editingChallenge.is_premade && (
+                                <div className="alert alert-info text-xs">
+                                    <span>Content for pre-made challenges cannot be edited. Only scoring values can be adjusted.</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="modal-action">
+                        <button className="btn px-6" onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                        <button className="btn btn-primary px-6" onClick={saveChallenge}>Save</button>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   )

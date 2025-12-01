@@ -7,15 +7,21 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, List, Optional
+import shutil
 
-# Import our new OOP models
 from game_models import Player, Team
+from challenges import Challenge
 
 app = FastAPI()
+
+# Mount uploads directory
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
@@ -28,21 +34,11 @@ app.add_middleware(
 )
 
 # --- CONFIG ---
-class ChallengeConfig(BaseModel):
-    id: str
-    title: str
-    category: str
-    points: int
-    min_points: int
-    decay: int
-    desc: str
-    flag: str
-
 class GameConfig(BaseModel):
     max_team_size: int = 0 
     max_players: int = 0   
     teams_enabled: bool = True 
-    challenges: List[ChallengeConfig]
+    challenges: List[Challenge]
     duration_seconds: int = 1800
 
 # --- GAME MANAGER ---
@@ -71,8 +67,8 @@ class GameManager:
             "teams": {},          
             "socket_map": {},     
             "challenge_stats": {c.id: 0 for c in config.challenges}, 
-            "detailed_solves": {c.id: [] for c in config.challenges}, # NEW: Log history
-            "start_time": None, # NEW: Track when game started
+            "detailed_solves": {c.id: [] for c in config.challenges}, # Log history
+            "start_time": None, # Track when game started
             "end_time": None
         }
         return code, token
@@ -107,6 +103,7 @@ class GameManager:
                     "category": c.category, 
                     "points": current_points,
                     "desc": c.desc,
+                    "files": c.files,
                     "solves": solves,
                     # Players don't get the history log to save bandwidth/prevent cheating
                 })
@@ -149,10 +146,23 @@ manager = GameManager()
 
 # --- API ---
 
-@app.post("/create")
+@app.post("/api/create")
 async def create_game_endpoint(config: GameConfig):
     code, token = manager.create_game(config)
     return {"gameCode": code, "adminToken": token}
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    # Sanitize the filename to ensure it's just the name, no paths
+    safe_filename = os.path.basename(file.filename)
+    
+    # Create a unique filename
+    file_location = f"uploads/{secrets.token_hex(8)}_{safe_filename}"
+    
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+        
+    return {"filename": safe_filename, "url": f"/uploads/{os.path.basename(file_location)}"}
 
 @app.websocket("/ws/{game_code}")
 async def websocket_endpoint(websocket: WebSocket, game_code: str):
@@ -215,7 +225,7 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str):
                     await websocket.send_json({
                         "type": "PLAYER_RESTORED", 
                         "playerId": found_player.id,
-                        "teamId": found_team.id if not found_team.is_solo else None,
+                        "teamId": found_team.id,
                         "teamName": found_team.name,
                         "isSolo": found_team.is_solo,
                         "solves": found_team.solves
